@@ -1,6 +1,6 @@
 # Object Detection and OCR Tool
 
-This project provides a detection and OCR (Optical Character Recognition) tool that can run on both local computers and phones directly using small models.
+This project provides a detection and OCR (Optical Character Recognition) tool that can run on both local computers and phones directly using small models. Basically, it is designed to use on android phone, please have a try!
 
 ## Features
 
@@ -35,10 +35,7 @@ Run any of the `object-detection-webapp.html` files in a web browser.
 2. Open the desired HTML file in a web browser
 3. Follow on-screen instructions for object detection or OCR
 
-## Technical Details
-
-- Language: HTML (100%)
-- Platform: Web-based
+## Platform: Web-based
 
 ## Contributing
 
