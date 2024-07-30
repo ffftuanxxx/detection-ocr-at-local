@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Object Detection</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        h1 {
+            color: #333;
+        }
+        #videoContainer {
+            position: relative;
+            margin: 20px 0;
+        }
+        #outputVideo {
+            max-width: 100%;
+            border: 2px solid #333;
+            border-radius: 8px;
+        }
+        #detectedObjects {
+            width: 100%;
+            max-width: 800px;
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        #errorMessage {
+            color: red;
+            margin-top: 10px;
+        }
+        #startButton {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #startButton:hover {
+            background-color: #45a049;
+        }
+        #startButton:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <h1>Real-time Object Detection</h1>
+    <div id="videoContainer">
+        <video id="outputVideo" autoplay muted></video>
+    </div>
+    <button id="startButton" disabled>Start Screen Capture</button>
+    <div id="detectedObjects"></div>
+    <div id="errorMessage"></div>
+
+    <script>
+        const video = document.getElementById('outputVideo');
+        const detectedObjectsDiv = document.getElementById('detectedObjects');
+        const errorMessageDiv = document.getElementById('errorMessage');
+        const startButton = document.getElementById('startButton');
+
+        let model;
+        let detectedObjectsList = new Map();
+
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+
+        async function loadModel() {
+            try {
+                await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs');
+                await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd');
+                
+                model = await cocoSsd.load();
+                errorMessageDiv.textContent = '';
+                startButton.disabled = false;
+            } catch (error) {
+                errorMessageDiv.textContent = 'Error loading the model. Please try again.';
+                console.error('Error loading the model:', error);
+            }
+        }
+
+        async function startCapture() {
+            try {
+                const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+                video.srcObject = stream;
+                errorMessageDiv.textContent = '';
+                startDetection();
+            } catch (error) {
+                errorMessageDiv.textContent = 'Error accessing screen capture. Please try again.';
+                console.error('Error accessing screen capture:', error);
+            }
+        }
+
+        function drawBoundingBox(prediction, ctx) {
+            const [x, y, width, height] = prediction.bbox;
+            ctx.strokeStyle = '#00FFFF';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x, y, width, height);
+
+            ctx.fillStyle = '#00FFFF';
+            ctx.font = '16px Arial';
+            ctx.fillText(
+                `${prediction.class} (${Math.round(prediction.score * 100)}%)`,
+                x, y > 10 ? y - 5 : 10
+            );
+        }
+
+        function updateDetectedObjectsList(predictions) {
+            predictions.forEach(prediction => {
+                if (!detectedObjectsList.has(prediction.class)) {
+                    detectedObjectsList.set(prediction.class, new Date().toLocaleTimeString());
+                }
+            });
+
+            let listHTML = '<h3>Detected Objects:</h3><ul>';
+            detectedObjectsList.forEach((time, object) => {
+                listHTML += `<li>${object} (First detected: ${time})</li>`;
+            });
+            listHTML += '</ul>';
+            detectedObjectsDiv.innerHTML = listHTML;
+        }
+
+        async function detectObjects() {
+            if (!model) return;
+
+            const predictions = await model.detect(video);
+
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            predictions.forEach(prediction => drawBoundingBox(prediction, ctx));
+
+            updateDetectedObjectsList(predictions);
+
+            video.style.display = 'none';
+            if (video.nextElementSibling) {
+                video.parentNode.removeChild(video.nextElementSibling);
+            }
+            video.parentNode.insertBefore(canvas, video.nextSibling);
+        }
+
+        function startDetection() {
+            setInterval(detectObjects, 500); // 2 frames per second
+        }
+
+        async function init() {
+            startButton.disabled = true;
+            await loadModel();
+            startButton.addEventListener('click', startCapture);
+        }
+
+        init();
+    </script>
+</body>
+</html>

@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Object Detection (Camera)</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        #videoContainer {
+            position: relative;
+            margin: 20px 0;
+            max-width: 100%;
+        }
+        #outputVideo {
+            width: 100%;
+            max-width: 640px;
+            border: 2px solid #333;
+            border-radius: 8px;
+        }
+        #detectedObjects {
+            width: 100%;
+            max-width: 640px;
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        #errorMessage {
+            color: red;
+            margin-top: 10px;
+            text-align: center;
+        }
+        #toggleButton {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #toggleButton:hover {
+            background-color: #45a049;
+        }
+        #toggleButton:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <h1>Real-time Object Detection (Camera)</h1>
+    <div id="videoContainer">
+        <video id="outputVideo" autoplay muted playsinline></video>
+    </div>
+    <button id="toggleButton" disabled>Start Camera</button>
+    <div id="detectedObjects"></div>
+    <div id="errorMessage"></div>
+
+    <script>
+        const video = document.getElementById('outputVideo');
+        const detectedObjectsDiv = document.getElementById('detectedObjects');
+        const errorMessageDiv = document.getElementById('errorMessage');
+        const toggleButton = document.getElementById('toggleButton');
+
+        let model;
+        let detectedObjectsList = new Map();
+        let isRunning = false;
+        let detectionInterval;
+
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+
+        async function loadModel() {
+            try {
+                await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs');
+                await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd');
+                
+                model = await cocoSsd.load();
+                errorMessageDiv.textContent = '';
+                toggleButton.disabled = false;
+            } catch (error) {
+                errorMessageDiv.textContent = 'Error loading the model. Please try again.';
+                console.error('Error loading the model:', error);
+            }
+        }
+
+        async function startCamera() {
+            try {
+                const constraints = {
+                    video: {
+                        facingMode: 'environment'
+                    }
+                };
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                await video.play(); // Ensure video is playing before starting detection
+                errorMessageDiv.textContent = '';
+                startDetection();
+                isRunning = true;
+                toggleButton.textContent = 'Stop Camera';
+            } catch (error) {
+                errorMessageDiv.textContent = 'Error accessing camera. Please make sure you have a camera connected and have granted permission.';
+                console.error('Error accessing camera:', error);
+            }
+        }
+
+        function stopCamera() {
+            const stream = video.srcObject;
+            const tracks = stream.getTracks();
+
+            tracks.forEach(track => track.stop());
+            video.srcObject = null;
+
+            clearInterval(detectionInterval);
+            isRunning = false;
+            toggleButton.textContent = 'Start Camera';
+
+            // Clear the canvas
+            const canvas = video.nextElementSibling;
+            if (canvas) {
+                canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+            }
+
+            // Clear detected objects list
+            detectedObjectsList.clear();
+            detectedObjectsDiv.innerHTML = '';
+        }
+
+        function drawBoundingBox(prediction, ctx) {
+            const [x, y, width, height] = prediction.bbox;
+            ctx.strokeStyle = '#00FFFF';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x, y, width, height);
+
+            ctx.fillStyle = '#00FFFF';
+            ctx.font = '16px Arial';
+            ctx.fillText(
+                `${prediction.class} (${Math.round(prediction.score * 100)}%)`,
+                x, y > 10 ? y - 5 : 10
+            );
+        }
+
+        function updateDetectedObjectsList(predictions) {
+            predictions.forEach(prediction => {
+                if (!detectedObjectsList.has(prediction.class)) {
+                    detectedObjectsList.set(prediction.class, new Date().toLocaleTimeString());
+                }
+            });
+
+            let listHTML = '<h3>Detected Objects:</h3><ul>';
+            detectedObjectsList.forEach((time, object) => {
+                listHTML += `<li>${object} (First detected: ${time})</li>`;
+            });
+            listHTML += '</ul>';
+            detectedObjectsDiv.innerHTML = listHTML;
+        }
+
+        async function detectObjects() {
+            if (!model || !isRunning) return;
+
+            const predictions = await model.detect(video);
+
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            predictions.forEach(prediction => drawBoundingBox(prediction, ctx));
+
+            updateDetectedObjectsList(predictions);
+
+            if (video.nextElementSibling) {
+                video.parentNode.removeChild(video.nextElementSibling);
+            }
+            video.parentNode.insertBefore(canvas, video.nextSibling);
+        }
+
+        function startDetection() {
+            detectionInterval = setInterval(detectObjects, 500); // 2 frames per second
+        }
+
+        function toggleCamera() {
+            if (isRunning) {
+                stopCamera();
+            } else {
+                startCamera();
+            }
+        }
+
+        async function init() {
+            toggleButton.disabled = true;
+            await loadModel();
+            toggleButton.addEventListener('click', toggleCamera);
+        }
+
+        init();
+    </script>
+</body>
+</html>

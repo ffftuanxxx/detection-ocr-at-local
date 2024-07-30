@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Kawaii Object Detection & OCR</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&display=swap');
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 100vh;
+            margin: 0;
+            padding: 10px;
+            background-color: #FFD1DC;
+            background-image: url('https://i.imgur.com/8gFRvnp.png');
+            background-size: cover;
+            background-attachment: fixed;
+            box-sizing: border-box;
+            color: #FF69B4;
+        }
+        h1 {
+            color: #FF1493;
+            text-align: center;
+            font-size: 1.8em;
+            margin: 20px 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+        #mainContainer {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            max-width: 800px;
+            gap: 10px;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 0 15px rgba(255, 105, 180, 0.3);
+        }
+        #outputVideo, #detectionCanvas, #imageUpload {
+            width: 100%;
+            height: auto;
+            aspect-ratio: 16 / 9;
+            object-fit: cover;
+            border: 3px solid #FF69B4;
+            border-radius: 15px;
+        }
+        #outputVideo {
+            opacity: 0.7;
+        }
+        #resultDiv {
+            width: 100%;
+            margin-top: 10px;
+            padding: 10px;
+            background-color: rgba(255, 255, 255, 0.8);
+            border: 2px solid #FF69B4;
+            border-radius: 15px;
+            font-size: 0.9em;
+        }
+        #errorMessage {
+            color: #FF1493;
+            margin-top: 10px;
+            text-align: center;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+        .button {
+            margin: 5px;
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #FF69B4;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .button:hover {
+            background-color: #FF1493;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px rgba(0,0,0,0.15);
+        }
+        .button:disabled {
+            background-color: #FFC0CB;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        #buttonContainer {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        #modelSelect, #modeSelect {
+            margin: 5px;
+            padding: 10px;
+            font-size: 16px;
+            background-color: #FF69B4;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        #modelSelect:hover, #modeSelect:hover {
+            background-color: #FF1493;
+        }
+        #ocrTextArea {
+            width: 100%;
+            height: 150px;
+            margin-top: 10px;
+            padding: 10px;
+            border: 2px solid #FF69B4;
+            border-radius: 15px;
+            font-size: 0.9em;
+            resize: vertical;
+        }
+        #imageUploadContainer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+        #loadingSpinner {
+            display: none;
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #FF69B4;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <h1>✨ Kawaii Object Detection & OCR ✨</h1>
+    <div id="mainContainer">
+        <div id="buttonContainer">
+            <button id="toggleButton" class="button" disabled>Start Camera</button>
+            <button id="switchCameraButton" class="button" disabled>Switch Camera</button>
+            <select id="modeSelect" class="button">
+                <option value="detection">Object Detection</option>
+                <option value="ocr">OCR</option>
+            </select>
+            <select id="modelSelect" class="button" disabled>
+                <option value="cocossd">COCO-SSD</option>
+                <option value="mobilenet">MobileNet</option>
+                <option value="yolov5">YOLOv5</option>
+            </select>
+        </div>
+        <canvas id="detectionCanvas"></canvas>
+        <video id="outputVideo" autoplay muted playsinline></video>
+        <div id="imageUploadContainer" style="display:none;">
+            <input type="file" id="imageUpload" accept="image/*">
+            <button id="startOCRButton" class="button">Start OCR</button>
+        </div>
+        <!-- <textarea id="ocrTextArea" readonly style="display:none;" placeholder="Detected text will appear here..."></textarea> -->
+        <div id="loadingSpinner"></div>
+        <textarea id="ocrTextArea" readonly style="display:none;" placeholder="Detected text will appear here..."></textarea>
+    </div>
+    <div id="resultDiv"></div>
+    <div id="errorMessage"></div>
+    <div id="resultDiv"></div>
+    <div id="errorMessage"></div>
+
+    <div id="progressBar" style="display:none; width:100%; background-color:#ddd;">
+        <div id="progressBarFill" style="width:0%; height:30px; background-color:#FF69B4; text-align:center; line-height:30px; color:white;">0%</div>
+    </div>
+    <script src='https://unpkg.com/tesseract.js@v2.1.0/dist/tesseract.min.js'></script>
+
+    <script>
+        const video = document.getElementById('outputVideo');
+        const canvas = document.getElementById('detectionCanvas');
+        const ctx = canvas.getContext('2d');
+        const resultDiv = document.getElementById('resultDiv');
+        const errorMessageDiv = document.getElementById('errorMessage');
+        const toggleButton = document.getElementById('toggleButton');
+        const switchCameraButton = document.getElementById('switchCameraButton');
+        const modelSelect = document.getElementById('modelSelect');
+        const modeSelect = document.getElementById('modeSelect');
+        const imageUpload = document.getElementById('imageUpload');
+        const startOCRButton = document.getElementById('startOCRButton');
+        const ocrTextArea = document.getElementById('ocrTextArea');
+        const imageUploadContainer = document.getElementById('imageUploadContainer');
+
+        let currentModel;
+        let detectedObjectsList = new Map();
+        let isRunning = false;
+        let detectionInterval;
+        let currentFacingMode = 'environment';
+        let currentMode = 'detection';
+
+        if (navigator.mediaDevices === undefined) {
+            navigator.mediaDevices = {};
+        }
+
+        if (navigator.mediaDevices.getUserMedia === undefined) {
+            navigator.mediaDevices.getUserMedia = function(constraints) {
+                var getUserMedia = navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+
+                if (!getUserMedia) {
+                    return Promise.reject(new Error('getUserMedia is not implemented in this browser'));
+                }
+
+                return new Promise(function(resolve, reject) {
+                    getUserMedia.call(navigator, constraints, resolve, reject);
+                });
+            }
+        }
+
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+
+        async function loadModel(modelName) {
+            try {
+                await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs');
+                
+                switch(modelName) {
+                    case 'cocossd':
+                        await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd');
+                        currentModel = await cocoSsd.load();
+                        break;
+                    case 'mobilenet':
+                        await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet');
+                        currentModel = await mobilenet.load();
+                        break;
+                    case 'yolov5':
+                        // Note: YOLOv5 doesn't have an official TensorFlow.js implementation
+                        // This is a placeholder. You'd need to implement or find a TFJS-compatible YOLOv5
+                        await loadScript('path/to/yolov5/tfjs/implementation');
+                        currentModel = await yolov5.load();
+                        break;
+                    default:
+                        throw new Error('Unknown model');
+                }
+                
+                errorMessageDiv.textContent = '';
+                toggleButton.disabled = false;
+                switchCameraButton.disabled = false;
+                modelSelect.disabled = false;
+            } catch (error) {
+                errorMessageDiv.textContent = `Error loading the ${modelName} model. Please try again.`;
+                console.error('Error loading the model:', error);
+            }
+        }
+
+        function setVideoAspectRatio() {
+            const aspectRatio = video.videoWidth / video.videoHeight;
+            video.style.aspectRatio = aspectRatio.toString();
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.style.aspectRatio = aspectRatio.toString();
+        }
+
+        async function startCamera() {
+            try {
+                const constraints = {
+                    video: {
+                        facingMode: currentFacingMode,
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                };
+                
+                let stream = await navigator.mediaDevices.getUserMedia(constraints);
+                
+                video.srcObject = stream;
+                video.addEventListener('loadedmetadata', setVideoAspectRatio);
+                await video.play();
+                errorMessageDiv.textContent = '';
+                startProcessing();
+                isRunning = true;
+                toggleButton.textContent = 'Stop Camera';
+                switchCameraButton.disabled = false;
+            } catch (error) {
+                console.error('Error accessing camera:', error);
+                errorMessageDiv.textContent = `Error accessing camera: ${error.message}. Please try again.`;
+            }
+        }
+
+        function stopCamera() {
+            const stream = video.srcObject;
+            const tracks = stream.getTracks();
+
+            tracks.forEach(track => track.stop());
+            video.srcObject = null;
+
+            clearInterval(detectionInterval);
+            isRunning = false;
+            toggleButton.textContent = 'Start Camera';
+            switchCameraButton.disabled = true;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            detectedObjectsList.clear();
+            resultDiv.innerHTML = '';
+        }
+
+        function drawBoundingBox(prediction) {
+            const [x, y, width, height] = prediction.bbox;
+            
+            ctx.strokeStyle = '#8A2BE2';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(x, y, width, height);
+
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(x, y > 20 ? y - 20 : y, width, 24);
+
+            ctx.fillStyle = '#FFFF00';
+            ctx.font = 'bold 20px Poppins';
+            ctx.fillText(
+                `${prediction.class} (${Math.round(prediction.score * 100)}%)`,
+                x + 4, y > 20 ? y - 2 : y + 18
+            );
+        }
+
+        function updateDetectedObjectsList(predictions) {
+            predictions.forEach(prediction => {
+                if (!detectedObjectsList.has(prediction.class)) {
+                    detectedObjectsList.set(prediction.class, new Date().toLocaleTimeString());
+                }
+            });
+
+            let listHTML = '<h3>✨ Detected Kawaii Objects ✨</h3><ul>';
+            detectedObjectsList.forEach((time, object) => {
+                listHTML += `<li>${object} (First detected: ${time})</li>`;
+            });
+            listHTML += '</ul>';
+            resultDiv.innerHTML = listHTML;
+        }
+
+        async function detectObjects() {
+            if (!currentModel || !isRunning) return;
+
+            let predictions;
+            switch(modelSelect.value) {
+                case 'cocossd':
+                    predictions = await currentModel.detect(video);
+                    break;
+                case 'mobilenet':
+                    const result = await currentModel.classify(video);
+                    predictions = result.map(r => ({
+                        bbox: [0, 0, canvas.width, canvas.height],
+                        class: r.className,
+                        score: r.probability
+                    }));
+                    break;
+                case 'yolov5':
+                    // Implement YOLOv5 detection here
+                    predictions = await currentModel.detect(video);
+                    break;
+            }
+
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            predictions.forEach(prediction => drawBoundingBox(prediction));
+
+            updateDetectedObjectsList(predictions);
+        }
+
+        async function performOCR() {
+            const file = imageUpload.files[0];
+            if (!file) {
+                errorMessageDiv.textContent = 'Please select an image first.';
+                return;
+            }
+            try {
+                ocrTextArea.value = 'Processing...';
+                document.getElementById('loadingSpinner').style.display = 'block';
+                
+                const img = await resizeImage(file);
+                const result = await recognizeText(img);
+                
+                ocrTextArea.value = result;
+                errorMessageDiv.textContent = '';
+            } catch (error) {
+                console.error('OCR Error:', error);
+                errorMessageDiv.textContent = 'Error performing OCR. Please try again.';
+                ocrTextArea.value = '';
+            } finally {
+                document.getElementById('loadingSpinner').style.display = 'none';
+            }
+        }
+        function resizeImage(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        const maxWidth = 1000;
+                        const scale = maxWidth / img.width;
+                        canvas.width = maxWidth;
+                        canvas.height = img.height * scale;
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        resolve(canvas.toDataURL('image/jpeg', 0.7));
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function recognizeText(imageData) {
+            const worker = await Tesseract.createWorker({
+                logger: m => console.log(m)
+            });
+            await worker.loadLanguage('eng');
+            await worker.initialize('eng');
+            const { data: { text } } = await worker.recognize(imageData);
+            await worker.terminate();
+            return text;
+        }
+
+        function startProcessing() {
+            clearInterval(detectionInterval);
+            if (currentMode === 'detection') {
+                detectionInterval = setInterval(detectObjects, 500);
+            }
+        }
+
+        function toggleCamera() {
+            if (isRunning) {
+                stopCamera();
+            } else {
+                startCamera();
+            }
+        }
+
+        function switchCamera() {
+            if (isRunning) {
+                stopCamera();
+                currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+                startCamera();
+            }
+        }
+
+        function updateUIForMode() {
+            if (currentMode === 'detection') {
+                canvas.style.display = 'block';
+                video.style.display = 'block';
+                imageUploadContainer.style.display = 'none';
+                ocrTextArea.style.display = 'none';
+                modelSelect.style.display = 'inline-block';
+                toggleButton.style.display = 'inline-block';
+                switchCameraButton.style.display = 'inline-block';
+            } else {
+                canvas.style.display = 'none';
+                video.style.display = 'none';
+                imageUploadContainer.style.display = 'flex';
+                ocrTextArea.style.display = 'block';
+                modelSelect.style.display = 'none';
+                toggleButton.style.display = 'none';
+                switchCameraButton.style.display = 'none';
+            }
+        }
+
+        async function init() {
+            toggleButton.disabled = true;
+            switchCameraButton.disabled = true;
+            modelSelect.disabled = true;
+            await loadModel('cocossd');
+            toggleButton.addEventListener('click', toggleCamera);
+            switchCameraButton.addEventListener('click', switchCamera);
+            modelSelect.addEventListener('change', async (event) => {
+                if (isRunning) {
+                    stopCamera();
+                }
+                await loadModel(event.target.value);
+                if (isRunning) {
+                    startCamera();
+                }
+            });
+            modeSelect.addEventListener('change', (event) => {
+                currentMode = event.target.value;
+                updateUIForMode();
+                if (isRunning) {
+                    stopCamera();
+                }
+            });
+            startOCRButton.addEventListener('click', performOCR);
+            updateUIForMode();
+        }
+
+        init();
+    </script>
+</body>
+</html>
