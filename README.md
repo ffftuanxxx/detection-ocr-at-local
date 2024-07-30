@@ -27,7 +27,7 @@ Run any of the `object-detection-webapp.html` files in a web browser.
 2. Load the `phone_detection.html` file
 3. Grant necessary camera permissions when prompted
 
-**Note**: It's crucial to run `phone_detection.html` on the local phone device's web browser. Otherwise, the program may not be able to access the camera.
+**Note**: It's crucial to run `phone_detection.html` on the local phone device's **default** web browser. Otherwise, the program may not be able to access the camera.
 
 ## Getting Started
 
