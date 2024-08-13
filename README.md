@@ -1,7 +1,7 @@
 # Object Detection and OCR Tool
 
 This project provides a detection and OCR (Optical Character Recognition) tool that can run on both local computers and phones directly using small models. Basically, it is designed to use on android phone, please have a try!
-- [Demo](elucidator.cn/detection)
+- [Demo](https://elucidator.cn/detection)
 
 ## Features
 
